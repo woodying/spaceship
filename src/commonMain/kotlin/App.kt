@@ -100,6 +100,7 @@ fun App() {
                 drawPlayer(gameState.player)
                 gameState.missiles.forEach { drawMissile(it) }
                 gameState.enemies.forEach { drawEnemy(it) }
+                gameState.items.forEach { drawItem(it) }
             }
             // HUD
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -163,6 +164,7 @@ private fun spawnWave(gameState: GameState) {
 private fun checkCollisions(gameState: GameState) {
     val missilesToRemove = mutableListOf<Missile>()
     val enemiesToRemove = mutableListOf<Enemy>()
+    val itemsToRemove = mutableListOf<Item>()
 
     // Missile-Enemy collision
     for (missile in gameState.missiles) {
@@ -172,18 +174,34 @@ private fun checkCollisions(gameState: GameState) {
             if (missileRect.overlaps(enemyRect)) {
                 missilesToRemove.add(missile)
                 enemiesToRemove.add(enemy)
+                // 1 in 3 chance to spawn a cheese
+                if (kotlin.random.Random.nextInt(0, 3) == 0) {
+                    gameState.items.add(Item(ItemType.CHEESE, enemy.position.copy()))
+                }
             }
         }
     }
 
-    // Player-Enemy collision
     val playerRect = Rect(gameState.player.position, androidx.compose.ui.geometry.Size(gameState.player.size, gameState.player.size))
+    // Player-Enemy collision
     for (enemy in gameState.enemies) {
         if (enemiesToRemove.contains(enemy)) continue // Don't check against already defeated enemies
         val enemyRect = Rect(enemy.position, androidx.compose.ui.geometry.Size(enemy.size, enemy.size))
         if (playerRect.overlaps(enemyRect)) {
             enemiesToRemove.add(enemy)
             gameState.player.health -= 25 // Player takes damage
+        }
+    }
+
+    // Player-Item collision
+    for (item in gameState.items) {
+        val itemRect = Rect(item.position, androidx.compose.ui.geometry.Size(item.size, item.size))
+        if (playerRect.overlaps(itemRect)) {
+            itemsToRemove.add(item)
+            when (item.type) {
+                ItemType.CHEESE -> gameState.player.lives++
+                ItemType.POWER_UP -> { /* Handle power-up later */ }
+            }
         }
     }
 
@@ -197,6 +215,7 @@ private fun checkCollisions(gameState: GameState) {
 
     gameState.missiles.removeAll(missilesToRemove)
     gameState.enemies.removeAll(enemiesToRemove)
+    gameState.items.removeAll(itemsToRemove)
 }
 
 private fun DrawScope.drawPlayer(player: Player) {
@@ -223,3 +242,10 @@ private fun DrawScope.drawEnemy(enemy: Enemy) {
     )
 }
 
+private fun DrawScope.drawItem(item: Item) {
+    drawCircle(
+        color = item.color,
+        radius = item.size / 2,
+        center = item.position.copy(x = item.position.x + item.size / 2, y = item.position.y + item.size / 2)
+    )
+}

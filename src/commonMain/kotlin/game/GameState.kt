@@ -10,6 +10,7 @@ class GameState {
     val player = Player(position = Offset(300f, 500f))
     val missiles = mutableStateListOf<Missile>()
     val enemies = mutableStateListOf<Enemy>()
+    val items = mutableStateListOf<Item>()
 
     val stages = listOf(stage1) // Add more stages later
     var currentStageIndex by mutableStateOf(0)
