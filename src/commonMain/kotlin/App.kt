@@ -17,18 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import game.Enemy
-import game.Missile
-import game.Player
+import game.*
 import kotlinx.coroutines.delay
-
-// Game state holder
-class GameState {
-    val player = Player(position = Offset(300f, 500f))
-    val missiles = mutableStateListOf<Missile>()
-    val enemies = mutableStateListOf<Enemy>()
-    var gameOver by mutableStateOf(false)
-}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -38,64 +28,58 @@ fun App() {
     val keysPressed = remember { mutableStateOf(emptySet<Key>()) }
 
     // Game loop
-    LaunchedEffect(gameState.gameOver) {
-        if (gameState.gameOver) return@LaunchedEffect
+    LaunchedEffect(gameState.gameOver, gameState.stageClear) {
+        if (gameState.gameOver || gameState.stageClear) return@LaunchedEffect
 
         var fireCooldown = 0
         val fireRate = 10 // Fire every 10 frames
 
-        // Spawn a test enemy
-        if (gameState.enemies.isEmpty()) {
-            gameState.enemies.add(Enemy(position = Offset(300f, 100f)))
+        // Start the first wave
+        if (gameState.currentWaveIndex == -1) {
+            gameState.currentWaveIndex = 0
+            spawnWave(gameState)
         }
 
         while (true) {
-            // Update player position
-            val moveDelta = 10f
-            if (Key.DirectionLeft in keysPressed.value) {
-                gameState.player.position = gameState.player.position.copy(x = gameState.player.position.x - moveDelta)
-            }
-            if (Key.DirectionRight in keysPressed.value) {
-                gameState.player.position = gameState.player.position.copy(x = gameState.player.position.x + moveDelta)
-            }
-            if (Key.DirectionUp in keysPressed.value) {
-                gameState.player.position = gameState.player.position.copy(y = gameState.player.position.y - moveDelta)
-            }
-            if (Key.DirectionDown in keysPressed.value) {
-                gameState.player.position = gameState.player.position.copy(y = gameState.player.position.y + moveDelta)
-            }
+            // --- Update game objects ---
+            updatePlayerPosition(keysPressed.value, gameState.player)
+            updateMissiles(gameState.missiles)
+            
+            // --- Spawn new things ---
+            fireCooldown = fireMissile(gameState, fireCooldown, fireRate)
 
-            // Update missiles
-            gameState.missiles.forEach { it.position = it.position.copy(y = it.position.y - 15f) }
-            gameState.missiles.removeAll { it.position.y < 0 }
-
-            // Fire missiles
-            if (fireCooldown <= 0) {
-                val missilePosition = gameState.player.position.copy(
-                    x = gameState.player.position.x + gameState.player.size / 2 - 7.5f, // Center the missile
-                    y = gameState.player.position.y
-                )
-                gameState.missiles.add(Missile(position = missilePosition))
-                fireCooldown = fireRate
-            } else {
-                fireCooldown--
-            }
-
-            // Check for collisions
+            // --- Handle interactions ---
             checkCollisions(gameState)
 
+            // --- Handle game state changes ---
             if (gameState.player.lives < 0) {
                 gameState.gameOver = true
                 break
+            }
+
+            if (gameState.enemies.isEmpty()) {
+                val currentStage = gameState.stages[gameState.currentStageIndex]
+                if (gameState.currentWaveIndex < currentStage.waves.size - 1) {
+                    gameState.currentWaveIndex++
+                    spawnWave(gameState)
+                } else {
+                    gameState.stageClear = true
+                    break
+                }
             }
 
             delay(16) // ~60 FPS
         }
     }
 
+    // --- Render UI ---
     if (gameState.gameOver) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Game Over", fontSize = 50.sp)
+        }
+    } else if (gameState.stageClear) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Stage Clear!", fontSize = 50.sp)
         }
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -112,39 +96,18 @@ fun App() {
                     true
                 }
             ) {
-                // Draw player
-                drawRect(
-                    color = gameState.player.color,
-                    topLeft = gameState.player.position,
-                    size = androidx.compose.ui.geometry.Size(gameState.player.size, gameState.player.size)
-                )
-
-                // Draw missiles
-                gameState.missiles.forEach { missile ->
-                    drawRect(
-                        color = missile.color,
-                        topLeft = missile.position,
-                        size = androidx.compose.ui.geometry.Size(missile.size, missile.size)
-                    )
-                }
-
-                // Draw enemies
-                gameState.enemies.forEach { enemy ->
-                    drawRect(
-                        color = enemy.color,
-                        topLeft = enemy.position,
-                        size = androidx.compose.ui.geometry.Size(enemy.size, enemy.size)
-                    )
-                }
+                drawPlayer(gameState.player)
+                gameState.missiles.forEach { drawMissile(it) }
+                gameState.enemies.forEach { drawEnemy(it) }
             }
             // HUD
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                Text("Stage: ${gameState.currentStageIndex + 1} - Wave: ${gameState.currentWaveIndex + 1}", color = Color.White, fontSize = 20.sp)
                 Text("Lives: ${gameState.player.lives}", color = Color.White, fontSize = 20.sp)
                 Text("Health: ${gameState.player.health}", color = Color.White, fontSize = 20.sp)
             }
         }
     }
-
 
     // Request focus to receive key events
     LaunchedEffect(Unit) {
@@ -152,7 +115,51 @@ fun App() {
     }
 }
 
-fun checkCollisions(gameState: GameState) {
+private fun updatePlayerPosition(keysPressed: Set<Key>, player: Player) {
+    val moveDelta = 10f
+    if (Key.DirectionLeft in keysPressed) {
+        player.position = player.position.copy(x = player.position.x - moveDelta)
+    }
+    if (Key.DirectionRight in keysPressed) {
+        player.position = player.position.copy(x = player.position.x + moveDelta)
+    }
+    if (Key.DirectionUp in keysPressed) {
+        player.position = player.position.copy(y = player.position.y - moveDelta)
+    }
+    if (Key.DirectionDown in keysPressed) {
+        player.position = player.position.copy(y = player.position.y + moveDelta)
+    }
+}
+
+private fun updateMissiles(missiles: MutableList<Missile>) {
+    missiles.forEach { it.position = it.position.copy(y = it.position.y - 15f) }
+    missiles.removeAll { it.position.y < 0 }
+}
+
+private fun fireMissile(gameState: GameState, currentCooldown: Int, fireRate: Int): Int {
+    var newCooldown = currentCooldown
+    if (newCooldown <= 0) {
+        val missilePosition = gameState.player.position.copy(
+            x = gameState.player.position.x + gameState.player.size / 2 - 7.5f, // Center the missile
+            y = gameState.player.position.y
+        )
+        gameState.missiles.add(Missile(position = missilePosition))
+        newCooldown = fireRate
+    } else {
+        newCooldown--
+    }
+    return newCooldown
+}
+
+private fun spawnWave(gameState: GameState) {
+    val currentStageData = gameState.stages[gameState.currentStageIndex]
+    val currentWaveData = currentStageData.waves[gameState.currentWaveIndex]
+    currentWaveData.enemies.forEach { enemySpawn ->
+        gameState.enemies.add(Enemy(position = enemySpawn.initialPosition))
+    }
+}
+
+private fun checkCollisions(gameState: GameState) {
     val missilesToRemove = mutableListOf<Missile>()
     val enemiesToRemove = mutableListOf<Enemy>()
 
@@ -171,6 +178,7 @@ fun checkCollisions(gameState: GameState) {
     // Player-Enemy collision
     val playerRect = Rect(gameState.player.position, androidx.compose.ui.geometry.Size(gameState.player.size, gameState.player.size))
     for (enemy in gameState.enemies) {
+        if (enemiesToRemove.contains(enemy)) continue // Don't check against already defeated enemies
         val enemyRect = Rect(enemy.position, androidx.compose.ui.geometry.Size(enemy.size, enemy.size))
         if (playerRect.overlaps(enemyRect)) {
             enemiesToRemove.add(enemy)
@@ -189,3 +197,4 @@ fun checkCollisions(gameState: GameState) {
     gameState.missiles.removeAll(missilesToRemove)
     gameState.enemies.removeAll(enemiesToRemove)
 }
+
