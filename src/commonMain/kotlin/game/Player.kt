@@ -9,5 +9,6 @@ data class Player(
     val color: Color = Color.Blue, // Placeholder color for the cat airplane
     var health: Int = 100,
     var lives: Int = 3,
-    var powerLevel: Int = 0
+    var powerLevel: Int = 0,
+    var specialGauge: Float = 0f
 )

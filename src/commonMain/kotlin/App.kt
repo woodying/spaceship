@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import game.*
 import kotlinx.coroutines.delay
+import kotlin.math.min
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -91,6 +92,11 @@ fun App() {
                 .onKeyEvent {
                     if (it.type == KeyEventType.KeyDown) {
                         keysPressed.value += it.key
+                        // Handle special move activation
+                        if (it.key == Key.Spacebar && gameState.player.specialGauge >= 100f) {
+                            gameState.enemies.clear()
+                            gameState.player.specialGauge = 0f
+                        }
                     } else if (it.type == KeyEventType.KeyUp) {
                         keysPressed.value -= it.key
                     }
@@ -107,6 +113,7 @@ fun App() {
                 Text("Stage: ${gameState.currentStageIndex + 1} - Wave: ${gameState.currentWaveIndex + 1}", color = Color.White, fontSize = 20.sp)
                 Text("Lives: ${gameState.player.lives}", color = Color.White, fontSize = 20.sp)
                 Text("Health: ${gameState.player.health}", color = Color.White, fontSize = 20.sp)
+                Text("Special: ${gameState.player.specialGauge.toInt()}", color = Color.White, fontSize = 20.sp)
             }
         }
     }
@@ -190,6 +197,8 @@ private fun checkCollisions(gameState: GameState) {
             if (missileRect.overlaps(enemyRect)) {
                 missilesToRemove.add(missile)
                 enemiesToRemove.add(enemy)
+                // Charge special gauge
+                gameState.player.specialGauge = min(100f, gameState.player.specialGauge + 5f)
                 // Item spawn logic
                 when (kotlin.random.Random.nextInt(0, 8)) { // Lower chance
                     0 -> gameState.items.add(Item(ItemType.CHEESE, enemy.position.copy()))
