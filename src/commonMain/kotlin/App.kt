@@ -14,6 +14,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -196,5 +197,29 @@ private fun checkCollisions(gameState: GameState) {
 
     gameState.missiles.removeAll(missilesToRemove)
     gameState.enemies.removeAll(enemiesToRemove)
+}
+
+private fun DrawScope.drawPlayer(player: Player) {
+    drawRect(
+        color = player.color,
+        topLeft = player.position,
+        size = androidx.compose.ui.geometry.Size(player.size, player.size)
+    )
+}
+
+private fun DrawScope.drawMissile(missile: Missile) {
+    drawRect(
+        color = missile.color,
+        topLeft = missile.position,
+        size = androidx.compose.ui.geometry.Size(missile.size, missile.size)
+    )
+}
+
+private fun DrawScope.drawEnemy(enemy: Enemy) {
+    drawRect(
+        color = enemy.color,
+        topLeft = enemy.position,
+        size = androidx.compose.ui.geometry.Size(enemy.size, enemy.size)
+    )
 }
 
