@@ -141,11 +141,27 @@ private fun updateMissiles(missiles: MutableList<Missile>) {
 private fun fireMissile(gameState: GameState, currentCooldown: Int, fireRate: Int): Int {
     var newCooldown = currentCooldown
     if (newCooldown <= 0) {
-        val missilePosition = gameState.player.position.copy(
-            x = gameState.player.position.x + gameState.player.size / 2 - 7.5f, // Center the missile
-            y = gameState.player.position.y
-        )
-        gameState.missiles.add(Missile(position = missilePosition))
+        val player = gameState.player
+        when (player.powerLevel) {
+            0 -> { // Single missile
+                val missilePosition = player.position.copy(x = player.position.x + player.size / 2 - 7.5f, y = player.position.y)
+                gameState.missiles.add(Missile(position = missilePosition))
+            }
+            1 -> { // Double missile
+                val missile1Pos = player.position.copy(x = player.position.x + player.size / 4 - 7.5f, y = player.position.y)
+                val missile2Pos = player.position.copy(x = player.position.x + player.size * 3 / 4 - 7.5f, y = player.position.y)
+                gameState.missiles.add(Missile(position = missile1Pos))
+                gameState.missiles.add(Missile(position = missile2Pos))
+            }
+            else -> { // Triple missile (and max level)
+                val missile1Pos = player.position.copy(x = player.position.x + player.size / 2 - 7.5f, y = player.position.y)
+                val missile2Pos = player.position.copy(x = player.position.x, y = player.position.y)
+                val missile3Pos = player.position.copy(x = player.position.x + player.size - 15f, y = player.position.y)
+                gameState.missiles.add(Missile(position = missile1Pos))
+                gameState.missiles.add(Missile(position = missile2Pos))
+                gameState.missiles.add(Missile(position = missile3Pos))
+            }
+        }
         newCooldown = fireRate
     } else {
         newCooldown--
@@ -174,9 +190,10 @@ private fun checkCollisions(gameState: GameState) {
             if (missileRect.overlaps(enemyRect)) {
                 missilesToRemove.add(missile)
                 enemiesToRemove.add(enemy)
-                // 1 in 3 chance to spawn a cheese
-                if (kotlin.random.Random.nextInt(0, 3) == 0) {
-                    gameState.items.add(Item(ItemType.CHEESE, enemy.position.copy()))
+                // Item spawn logic
+                when (kotlin.random.Random.nextInt(0, 8)) { // Lower chance
+                    0 -> gameState.items.add(Item(ItemType.CHEESE, enemy.position.copy()))
+                    1 -> gameState.items.add(Item(ItemType.POWER_UP, enemy.position.copy(), color = Color.Cyan))
                 }
             }
         }
@@ -200,7 +217,7 @@ private fun checkCollisions(gameState: GameState) {
             itemsToRemove.add(item)
             when (item.type) {
                 ItemType.CHEESE -> gameState.player.lives++
-                ItemType.POWER_UP -> { /* Handle power-up later */ }
+                ItemType.POWER_UP -> if (gameState.player.powerLevel < 2) gameState.player.powerLevel++
             }
         }
     }
@@ -210,6 +227,7 @@ private fun checkCollisions(gameState: GameState) {
         if (gameState.player.lives >= 0) {
             gameState.player.health = 100
             gameState.player.position = Offset(300f, 500f) // Reset position
+            gameState.player.powerLevel = 0 // Reset power level
         }
     }
 
