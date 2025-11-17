@@ -3,10 +3,8 @@ package game
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 
-data class Player(
+data class Enemy(
     var position: Offset,
     val size: Float = 50f,
-    val color: Color = Color.Blue, // Placeholder color for the cat airplane
-    var health: Int = 100,
-    var lives: Int = 3
+    val color: Color = Color.Red // Placeholder color for the mouse enemy
 )
