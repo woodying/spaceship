@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.pointerInput // New import
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import game.*
@@ -29,9 +31,33 @@ fun App() {
     val focusRequester = remember { FocusRequester() }
     val keysPressed = remember { mutableStateOf(emptySet<Key>()) }
 
+    when (gameState.currentScreen) {
+        Screen.MENU -> MenuScreen(gameState)
+        Screen.GAME -> GameScreen(gameState, focusRequester, keysPressed)
+        Screen.GAME_OVER -> GameOverScreen(gameState)
+        Screen.STAGE_CLEAR -> StageClearScreen(gameState)
+    }
+
+    // Request focus to receive key events
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun GameScreen(gameState: GameState, focusRequester: FocusRequester, keysPressed: MutableState<Set<Key>>) {
+    // TODO: Play game background music
     // Game loop
     LaunchedEffect(gameState.gameOver, gameState.stageClear) {
-        if (gameState.gameOver || gameState.stageClear) return@LaunchedEffect
+        if (gameState.gameOver) {
+            gameState.currentScreen = Screen.GAME_OVER
+            return@LaunchedEffect
+        }
+        if (gameState.stageClear) {
+            gameState.currentScreen = Screen.STAGE_CLEAR
+            return@LaunchedEffect
+        }
 
         var fireCooldown = 0
         val fireRate = 10 // Fire every 10 frames
@@ -94,61 +120,122 @@ fun App() {
         }
     }
 
-    // --- Render UI ---
-    if (gameState.gameOver) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Game Over", fontSize = 50.sp)
-        }
-    } else if (gameState.stageClear) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Stage Clear!", fontSize = 50.sp)
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Canvas(modifier = Modifier
-                .fillMaxSize()
-                .focusRequester(focusRequester)
-                .focusable()
-                .onKeyEvent {
-                    if (it.type == KeyEventType.KeyDown) {
-                        keysPressed.value += it.key
-                        // Handle special move activation
-                        if (it.key == Key.Spacebar && gameState.player.specialGauge >= 100f) {
-                            gameState.enemies.clear()
-                            gameState.player.specialGauge = 0f
-                        }
-                    } else if (it.type == KeyEventType.KeyUp) {
-                        keysPressed.value -= it.key
+    Box(modifier = Modifier.fillMaxSize()) {
+        Canvas(modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent {
+                if (it.type == KeyEventType.KeyDown) {
+                    keysPressed.value += it.key
+                    // Handle special move activation
+                    if (it.key == Key.Spacebar && gameState.player.specialGauge >= 100f) {
+                        gameState.enemies.clear()
+                        gameState.player.specialGauge = 0f
                     }
-                    true
+                } else if (it.type == KeyEventType.KeyUp) {
+                    keysPressed.value -= it.key
                 }
-            ) {
-                drawPlayer(gameState.player)
-                gameState.missiles.forEach { drawMissile(it) }
-                gameState.enemies.forEach { drawEnemy(it) }
-                gameState.items.forEach { drawItem(it) }
-                gameState.boss?.let { drawBoss(it) }
-                gameState.bossMissiles.forEach { drawBossMissile(it) }
+                true
             }
-            // HUD
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                Text("Stage: ${gameState.currentStageIndex + 1} - Wave: ${gameState.currentWaveIndex + 1}", color = Color.White, fontSize = 20.sp)
-                Text("Lives: ${gameState.player.lives}", color = Color.White, fontSize = 20.sp)
-                Text("Health: ${gameState.player.health}", color = Color.White, fontSize = 20.sp)
-                Text("Special: ${gameState.player.specialGauge.toInt()}", color = Color.White, fontSize = 20.sp)
-                if (gameState.bossAppeared) {
-                    gameState.boss?.let {
-                        Text("Boss Health: ${it.health}", color = Color.White, fontSize = 20.sp)
-                    }
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    gameState.player.position = gameState.player.position.copy(
+                        x = gameState.player.position.x + dragAmount.x,
+                        y = gameState.player.position.y + dragAmount.y
+                    )
+                }
+            }
+        ) {
+            drawPlayer(gameState.player)
+            gameState.missiles.forEach { drawMissile(it) }
+            gameState.enemies.forEach { drawEnemy(it) }
+            gameState.items.forEach { drawItem(it) }
+            gameState.boss?.let { drawBoss(it) }
+            gameState.bossMissiles.forEach { drawBossMissile(it) }
+        }
+        // HUD
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Text("Stage: ${gameState.currentStageIndex + 1} - Wave: ${gameState.currentWaveIndex + 1}", color = Color.White, fontSize = 20.sp)
+            Text("Lives: ${gameState.player.lives}", color = Color.White, fontSize = 20.sp)
+            Text("Health: ${gameState.player.health}", color = Color.White, fontSize = 20.sp)
+            Text("Special: ${gameState.player.specialGauge.toInt()}", color = Color.White, fontSize = 20.sp)
+            if (gameState.bossAppeared) {
+                gameState.boss?.let {
+                    Text("Boss Health: ${it.health}", color = Color.White, fontSize = 20.sp)
                 }
             }
         }
     }
+}
 
-    // Request focus to receive key events
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+@Composable
+fun MenuScreen(gameState: GameState) {
+    // TODO: Play menu background music
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("냥냥 슈터", fontSize = 50.sp, color = Color.White)
+            Button(onClick = {
+                resetGame(gameState)
+                gameState.currentScreen = Screen.GAME
+            }, modifier = Modifier.padding(top = 20.dp)) {
+                Text("게임 시작", fontSize = 30.sp)
+            }
+        }
     }
+}
+
+@Composable
+fun GameOverScreen(gameState: GameState) {
+    // TODO: Play game over sound/music
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("게임 오버", fontSize = 50.sp, color = Color.White)
+            Button(onClick = {
+                resetGame(gameState)
+                gameState.currentScreen = Screen.GAME
+            }, modifier = Modifier.padding(top = 20.dp)) {
+                Text("다시 시작", fontSize = 30.sp)
+            }
+        }
+    }
+}
+
+@Composable
+fun StageClearScreen(gameState: GameState) {
+    // TODO: Play stage clear sound/music
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("스테이지 클리어!", fontSize = 50.sp, color = Color.White)
+            Button(onClick = {
+                // For now, just restart the current stage
+                resetGame(gameState)
+                gameState.currentScreen = Screen.GAME
+            }, modifier = Modifier.padding(top = 20.dp)) {
+                Text("다음 스테이지", fontSize = 30.sp)
+            }
+        }
+    }
+}
+
+private fun resetGame(gameState: GameState) {
+    // TODO: Stop all sounds and music, reset audio states
+    gameState.player.lives = 3
+    gameState.player.health = 100
+    gameState.player.position = Offset(300f, 500f)
+    gameState.player.powerLevel = 0
+    gameState.player.specialGauge = 0f
+    gameState.missiles.clear()
+    gameState.enemies.clear()
+    gameState.items.clear()
+    gameState.bossMissiles.clear()
+    gameState.boss = null
+    gameState.currentStageIndex = 0
+    gameState.currentWaveIndex = -1
+    gameState.gameOver = false
+    gameState.stageClear = false
+    gameState.bossAppeared = false
 }
 
 private fun updatePlayerPosition(keysPressed: Set<Key>, player: Player) {
@@ -186,6 +273,7 @@ private fun updateBoss(boss: Boss, gameState: GameState) {
     if (boss.fireCooldown <= 0) {
         val missilePosition = boss.position.copy(x = boss.position.x + boss.size / 2 - 10f, y = boss.position.y + boss.size)
         gameState.bossMissiles.add(BossMissile(position = missilePosition))
+        // TODO: Play boss missile sound effect
         boss.fireCooldown = 120 // Reset cooldown (e.g., every 2 seconds)
     } else {
         boss.fireCooldown--
@@ -221,6 +309,7 @@ private fun fireMissile(gameState: GameState, currentCooldown: Int, fireRate: In
                 gameState.missiles.add(Missile(position = missile3Pos))
             }
         }
+        // TODO: Play player missile sound effect
         newCooldown = fireRate
     } else {
         newCooldown--
@@ -250,6 +339,7 @@ private fun checkCollisions(gameState: GameState) {
             if (missileRect.overlaps(enemyRect)) {
                 missilesToRemove.add(missile)
                 enemiesToRemove.add(enemy)
+                // TODO: Play enemy hit sound effect
                 // Charge special gauge
                 gameState.player.specialGauge = min(100f, gameState.player.specialGauge + 5f)
                 // Item spawn logic
@@ -270,6 +360,7 @@ private fun checkCollisions(gameState: GameState) {
             if (missileRect.overlaps(bossRect)) {
                 missilesToRemove.add(missile)
                 boss.health--
+                // TODO: Play boss hit sound effect
             }
         }
     }
@@ -282,6 +373,7 @@ private fun checkCollisions(gameState: GameState) {
         if (playerRect.overlaps(enemyRect)) {
             enemiesToRemove.add(enemy)
             gameState.player.health -= 25 // Player takes damage
+            // TODO: Play player hit sound effect
         }
     }
 
@@ -291,6 +383,7 @@ private fun checkCollisions(gameState: GameState) {
         if (playerRect.overlaps(missileRect)) {
             bossMissilesToRemove.add(missile)
             gameState.player.health -= 20 // Player takes damage from boss
+            // TODO: Play player hit sound effect
         }
     }
 
@@ -299,6 +392,7 @@ private fun checkCollisions(gameState: GameState) {
         val itemRect = Rect(item.position, androidx.compose.ui.geometry.Size(item.size, item.size))
         if (playerRect.overlaps(itemRect)) {
             itemsToRemove.add(item)
+            // TODO: Play item pickup sound effect
             when (item.type) {
                 ItemType.CHEESE -> gameState.player.lives++
                 ItemType.POWER_UP -> if (gameState.player.powerLevel < 2) gameState.player.powerLevel++
@@ -312,6 +406,7 @@ private fun checkCollisions(gameState: GameState) {
             gameState.player.health = 100
             gameState.player.position = Offset(300f, 500f) // Reset position
             gameState.player.powerLevel = 0 // Reset power level
+            // TODO: Play player death sound effect
         }
     }
 
@@ -322,48 +417,58 @@ private fun checkCollisions(gameState: GameState) {
 }
 
 private fun DrawScope.drawPlayer(player: Player) {
+    // TODO: Replace with actual player image
     drawRect(
-        color = player.color,
+        color = Color.Blue, // Distinct color for player
         topLeft = player.position,
         size = androidx.compose.ui.geometry.Size(player.size, player.size)
     )
 }
 
 private fun DrawScope.drawMissile(missile: Missile) {
+    // TODO: Replace with actual player missile image
     drawRect(
-        color = missile.color,
+        color = Color.Cyan, // Distinct color for player missile
         topLeft = missile.position,
         size = androidx.compose.ui.geometry.Size(missile.size, missile.size)
     )
 }
 
 private fun DrawScope.drawEnemy(enemy: Enemy) {
+    // TODO: Replace with actual enemy image
     drawRect(
-        color = enemy.color,
+        color = Color.Green, // Distinct color for enemy
         topLeft = enemy.position,
         size = androidx.compose.ui.geometry.Size(enemy.size, enemy.size)
     )
 }
 
 private fun DrawScope.drawBoss(boss: Boss) {
+    // TODO: Replace with actual boss image
     drawRect(
-        color = boss.color,
+        color = Color.Red, // Distinct color for boss
         topLeft = boss.position,
         size = androidx.compose.ui.geometry.Size(boss.size, boss.size)
     )
 }
 
 private fun DrawScope.drawBossMissile(missile: BossMissile) {
+    // TODO: Replace with actual boss missile image
     drawRect(
-        color = missile.color,
+        color = Color.Magenta, // Distinct color for boss missile
         topLeft = missile.position,
         size = androidx.compose.ui.geometry.Size(missile.size, missile.size)
     )
 }
 
 private fun DrawScope.drawItem(item: Item) {
+    // TODO: Replace with actual item images
+    val itemColor = when (item.type) {
+        ItemType.CHEESE -> Color.Yellow
+        ItemType.POWER_UP -> Color.Orange
+    }
     drawCircle(
-        color = item.color,
+        color = itemColor, // Distinct colors for items
         radius = item.size / 2,
         center = item.position.copy(x = item.position.x + item.size / 2, y = item.position.y + item.size / 2)
     )

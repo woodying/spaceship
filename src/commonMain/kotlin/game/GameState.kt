@@ -6,6 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 
+enum class Screen {
+    MENU, GAME, GAME_OVER, STAGE_CLEAR
+}
+
 class GameState {
     val player = Player(position = Offset(300f, 500f))
     val missiles = mutableStateListOf<Missile>()
@@ -21,4 +25,5 @@ class GameState {
     var gameOver by mutableStateOf(false)
     var stageClear by mutableStateOf(false)
     var bossAppeared by mutableStateOf(false)
+    var currentScreen by mutableStateOf(Screen.MENU)
 }
