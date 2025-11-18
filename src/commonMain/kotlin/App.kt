@@ -46,7 +46,9 @@ fun App() {
             // --- Update game objects ---
             updatePlayerPosition(keysPressed.value, gameState.player)
             updateMissiles(gameState.missiles)
-            
+            updateBossMissiles(gameState.bossMissiles)
+            gameState.boss?.let { updateBoss(it, gameState) }
+
             // --- Spawn new things ---
             fireCooldown = fireMissile(gameState, fireCooldown, fireRate)
 
@@ -56,18 +58,36 @@ fun App() {
             // --- Handle game state changes ---
             if (gameState.player.lives < 0) {
                 gameState.gameOver = true
-                break
             }
 
-            if (gameState.enemies.isEmpty()) {
+            if (gameState.enemies.isEmpty() && !gameState.bossAppeared) {
                 val currentStage = gameState.stages[gameState.currentStageIndex]
                 if (gameState.currentWaveIndex < currentStage.waves.size - 1) {
                     gameState.currentWaveIndex++
                     spawnWave(gameState)
                 } else {
-                    gameState.stageClear = true
-                    break
+                    currentStage.boss?.let { bossSpawn ->
+                        gameState.boss = Boss(
+                            position = bossSpawn.initialPosition,
+                            health = bossSpawn.health
+                        )
+                        gameState.bossAppeared = true
+                    } ?: run {
+                        gameState.stageClear = true
+                    }
                 }
+            }
+
+            if (gameState.bossAppeared) {
+                gameState.boss?.let { boss ->
+                    if (boss.health <= 0) {
+                        gameState.stageClear = true
+                    }
+                }
+            }
+
+            if (gameState.stageClear || gameState.gameOver) {
+                break
             }
 
             delay(16) // ~60 FPS
@@ -107,6 +127,8 @@ fun App() {
                 gameState.missiles.forEach { drawMissile(it) }
                 gameState.enemies.forEach { drawEnemy(it) }
                 gameState.items.forEach { drawItem(it) }
+                gameState.boss?.let { drawBoss(it) }
+                gameState.bossMissiles.forEach { drawBossMissile(it) }
             }
             // HUD
             Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -114,6 +136,11 @@ fun App() {
                 Text("Lives: ${gameState.player.lives}", color = Color.White, fontSize = 20.sp)
                 Text("Health: ${gameState.player.health}", color = Color.White, fontSize = 20.sp)
                 Text("Special: ${gameState.player.specialGauge.toInt()}", color = Color.White, fontSize = 20.sp)
+                if (gameState.bossAppeared) {
+                    gameState.boss?.let {
+                        Text("Boss Health: ${it.health}", color = Color.White, fontSize = 20.sp)
+                    }
+                }
             }
         }
     }
@@ -143,6 +170,31 @@ private fun updatePlayerPosition(keysPressed: Set<Key>, player: Player) {
 private fun updateMissiles(missiles: MutableList<Missile>) {
     missiles.forEach { it.position = it.position.copy(y = it.position.y - 15f) }
     missiles.removeAll { it.position.y < 0 }
+}
+
+private fun updateBoss(boss: Boss, gameState: GameState) {
+    // Movement
+    val moveSpeed = 3f
+    boss.position = boss.position.copy(x = boss.position.x + moveSpeed * boss.direction)
+
+    // Assuming screen width is around 800 for now. A better approach would be to pass screen dimensions.
+    if (boss.position.x <= 0 || boss.position.x >= 800 - boss.size) {
+        boss.direction *= -1
+    }
+
+    // Firing
+    if (boss.fireCooldown <= 0) {
+        val missilePosition = boss.position.copy(x = boss.position.x + boss.size / 2 - 10f, y = boss.position.y + boss.size)
+        gameState.bossMissiles.add(BossMissile(position = missilePosition))
+        boss.fireCooldown = 120 // Reset cooldown (e.g., every 2 seconds)
+    } else {
+        boss.fireCooldown--
+    }
+}
+
+private fun updateBossMissiles(missiles: MutableList<BossMissile>) {
+    missiles.forEach { it.position = it.position.copy(y = it.position.y + 8f) }
+    missiles.removeAll { it.position.y > 800 } // Assuming screen height is 800
 }
 
 private fun fireMissile(gameState: GameState, currentCooldown: Int, fireRate: Int): Int {
@@ -188,6 +240,7 @@ private fun checkCollisions(gameState: GameState) {
     val missilesToRemove = mutableListOf<Missile>()
     val enemiesToRemove = mutableListOf<Enemy>()
     val itemsToRemove = mutableListOf<Item>()
+    val bossMissilesToRemove = mutableListOf<BossMissile>()
 
     // Missile-Enemy collision
     for (missile in gameState.missiles) {
@@ -208,6 +261,19 @@ private fun checkCollisions(gameState: GameState) {
         }
     }
 
+    // Missile-Boss collision
+    gameState.boss?.let { boss ->
+        val bossRect = Rect(boss.position, androidx.compose.ui.geometry.Size(boss.size, boss.size))
+        for (missile in gameState.missiles) {
+            if (missilesToRemove.contains(missile)) continue
+            val missileRect = Rect(missile.position, androidx.compose.ui.geometry.Size(missile.size, missile.size))
+            if (missileRect.overlaps(bossRect)) {
+                missilesToRemove.add(missile)
+                boss.health--
+            }
+        }
+    }
+
     val playerRect = Rect(gameState.player.position, androidx.compose.ui.geometry.Size(gameState.player.size, gameState.player.size))
     // Player-Enemy collision
     for (enemy in gameState.enemies) {
@@ -216,6 +282,15 @@ private fun checkCollisions(gameState: GameState) {
         if (playerRect.overlaps(enemyRect)) {
             enemiesToRemove.add(enemy)
             gameState.player.health -= 25 // Player takes damage
+        }
+    }
+
+    // Player-BossMissile collision
+    for (missile in gameState.bossMissiles) {
+        val missileRect = Rect(missile.position, androidx.compose.ui.geometry.Size(missile.size, missile.size))
+        if (playerRect.overlaps(missileRect)) {
+            bossMissilesToRemove.add(missile)
+            gameState.player.health -= 20 // Player takes damage from boss
         }
     }
 
@@ -243,6 +318,7 @@ private fun checkCollisions(gameState: GameState) {
     gameState.missiles.removeAll(missilesToRemove)
     gameState.enemies.removeAll(enemiesToRemove)
     gameState.items.removeAll(itemsToRemove)
+    gameState.bossMissiles.removeAll(bossMissilesToRemove)
 }
 
 private fun DrawScope.drawPlayer(player: Player) {
@@ -266,6 +342,22 @@ private fun DrawScope.drawEnemy(enemy: Enemy) {
         color = enemy.color,
         topLeft = enemy.position,
         size = androidx.compose.ui.geometry.Size(enemy.size, enemy.size)
+    )
+}
+
+private fun DrawScope.drawBoss(boss: Boss) {
+    drawRect(
+        color = boss.color,
+        topLeft = boss.position,
+        size = androidx.compose.ui.geometry.Size(boss.size, boss.size)
+    )
+}
+
+private fun DrawScope.drawBossMissile(missile: BossMissile) {
+    drawRect(
+        color = missile.color,
+        topLeft = missile.position,
+        size = androidx.compose.ui.geometry.Size(missile.size, missile.size)
     )
 }
 

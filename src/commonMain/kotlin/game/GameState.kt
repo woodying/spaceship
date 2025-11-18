@@ -11,6 +11,8 @@ class GameState {
     val missiles = mutableStateListOf<Missile>()
     val enemies = mutableStateListOf<Enemy>()
     val items = mutableStateListOf<Item>()
+    val bossMissiles = mutableStateListOf<BossMissile>()
+    var boss by mutableStateOf<Boss?>(null)
 
     val stages = listOf(stage1) // Add more stages later
     var currentStageIndex by mutableStateOf(0)
@@ -18,4 +20,5 @@ class GameState {
 
     var gameOver by mutableStateOf(false)
     var stageClear by mutableStateOf(false)
+    var bossAppeared by mutableStateOf(false)
 }

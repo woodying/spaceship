@@ -11,8 +11,14 @@ data class Wave(
     val enemies: List<EnemySpawn>
 )
 
+data class BossSpawn(
+    val initialPosition: Offset,
+    val health: Int
+)
+
 data class Stage(
-    val waves: List<Wave>
+    val waves: List<Wave>,
+    val boss: BossSpawn? = null
 )
 
 val stage1 = Stage(
@@ -38,5 +44,6 @@ val stage1 = Stage(
                 EnemySpawn(initialPosition = Offset(400f, 150f))
             )
         )
-    )
+    ),
+    boss = BossSpawn(initialPosition = Offset(300f, 150f), health = 100)
 )
