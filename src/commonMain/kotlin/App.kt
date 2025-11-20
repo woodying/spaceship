@@ -38,16 +38,16 @@ fun App() {
         Screen.GAME_OVER -> GameOverScreen(gameState)
         Screen.STAGE_CLEAR -> StageClearScreen(gameState)
     }
-
-    // Request focus to receive key events
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun GameScreen(gameState: GameState, focusRequester: FocusRequester, keysPressed: MutableState<Set<Key>>) {
+    // Request focus to receive key events
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     // TODO: Play game background music
     // Game loop
     LaunchedEffect(gameState.gameOver, gameState.stageClear) {
