@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput // New import
 import androidx.compose.ui.unit.dp
@@ -465,7 +466,7 @@ private fun DrawScope.drawItem(item: Item) {
     // TODO: Replace with actual item images
     val itemColor = when (item.type) {
         ItemType.CHEESE -> Color.Yellow
-        ItemType.POWER_UP -> Color.Orange
+        ItemType.POWER_UP -> Color(0xFFFFA500) // Orange color
     }
     drawCircle(
         color = itemColor, // Distinct colors for items
